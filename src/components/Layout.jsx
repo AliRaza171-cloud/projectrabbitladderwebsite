@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Header from './Header.jsx';
 import Footer from './Footer.jsx';
+import Watermark from './Watermark.jsx';
 
 // Scrolls to the top on page change, or to #section when the URL has a hash.
 function ScrollManager() {
@@ -36,6 +37,7 @@ export default function Layout() {
         <Outlet />
       </main>
       <Footer />
+      <Watermark />
     </>
   );
 }
