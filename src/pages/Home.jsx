@@ -6,8 +6,8 @@ import usePageTitle from '../hooks/usePageTitle.js';
 import { CATEGORIES, STORE, VIDEO_VISIT_STEPS } from '../data/site.js';
 import { IMAGES } from '../data/images.js';
 
-// Phones: 91 still frames in public/media/hero-frames (f_001.webp … f_091.webp)
-const HERO_MOBILE_FRAMES = { path: '/media/hero-frames/f_', count: 91, ext: 'webp', pad: 3 };
+// Phones: 76 still frames in public/media/hero-frames-v2 (f_001.webp … f_076.webp)
+const HERO_MOBILE_FRAMES = { path: '/media/hero-frames-v2/f_', count: 76, ext: 'webp', pad: 3 };
 
 export default function Home() {
   usePageTitle('');

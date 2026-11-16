@@ -1932,3 +1932,22 @@ img {
     padding: 24px 20px;
   }
 }
+
+/* Phones: avoid expensive blur effects while scrolling */
+.watermark {
+  will-change: transform;
+  transform: translateZ(0);
+}
+@media (max-width: 900px), (hover: none) {
+  .watermark-badge,
+  .site-header--overlay .main-nav__pill {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .watermark-badge {
+    background: rgba(30, 33, 66, 0.92);
+  }
+}
+.hero-scroll__canvas {
+  will-change: contents;
+}

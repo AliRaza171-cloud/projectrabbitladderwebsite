@@ -16,8 +16,8 @@ import { Link } from 'react-router-dom';
  *
  * Re-encode the desktop video with every frame as a keyframe:
  *   ffmpeg -i in.mp4 -an -vf fps=15,scale=1280:-2 -c:v libx264 -crf 30 -g 1 -pix_fmt yuv420p -movflags +faststart hero-walkin.mp4
- * Make the phone frames (91 frames, 432×720, centre crop):
- *   ffmpeg -i in.mp4 -vf "fps=12,crop=432:720" -c:v libwebp -quality 60 hero-frames/f_%03d.webp
+ * Make the phone frames (76 frames, 432×720, centre crop):
+ *   ffmpeg -i in.mp4 -vf "fps=10,crop=432:720" -c:v libwebp -quality 58 hero-frames-v2/f_%03d.webp
  */
 
 const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
@@ -38,6 +38,7 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
   const canvasRef = useRef(null);
   const framesRef = useRef([]); // Image objects (frames mode)
   const loadedRef = useRef([]); // booleans: which frames have loaded
+  const loadedCountRef = useRef(0); // bumps each time a frame finishes loading
   const introRef = useRef(null);
   const welcomeRef = useRef(null);
   const barRef = useRef(null);
@@ -122,23 +123,43 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
     }
 
     let next = 0;
-    const PARALLEL = 6;
+    // Vercel serves files over HTTP/2, so many requests can run at once.
+    const PARALLEL = 16;
+
+    // Decode the picture up front so drawing it later never stutters.
+    const decodeFrame = async (img) => {
+      if (typeof createImageBitmap === 'function') {
+        try {
+          return await createImageBitmap(img);
+        } catch {
+          /* fall through */
+        }
+      }
+      if (img.decode) await img.decode().catch(() => {});
+      return img;
+    };
 
     const loadNext = () => {
       if (cancelled || next >= order.length) return;
       const i = order[next++];
       const img = new Image();
       img.decoding = 'async';
-      img.onload = img.onerror = () => {
+      const done = async (ok) => {
         if (cancelled) return;
-        if (img.naturalWidth) loadedRef.current[i] = true;
+        if (ok && img.naturalWidth) {
+          framesRef.current[i] = await decodeFrame(img);
+          if (cancelled) return;
+          loadedRef.current[i] = true;
+          loadedCountRef.current += 1;
+        }
         loaded += 1;
         setLoadPct(Math.round((loaded / count) * 100));
         if (loaded === count) setReady(true);
         loadNext();
       };
+      img.onload = () => done(true);
+      img.onerror = () => done(false);
       img.src = frameUrl(mobileFrames, i);
-      framesRef.current[i] = img;
     };
 
     for (let k = 0; k < PARALLEL; k++) loadNext();
@@ -161,7 +182,11 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
     let raf = 0;
     let eased = 0;
     let drawnIndex = -1;
+    let drawnPos = -1;
+    let drawnLoaded = -1;
     let primed = false;
+    // How quickly the walk-in follows the scroll (1 = instantly).
+    const follow = mode === 'frames' ? 0.35 : 0.18;
 
     // Keep the canvas at the screen's real pixel size (sharp on retina).
     const sizeCanvas = () => {
@@ -173,17 +198,22 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
         canvas.width = w;
         canvas.height = h;
         drawnIndex = -1; // force a redraw
+        drawnPos = -1;
       }
     };
 
-    // Draw an image so it covers the canvas (like CSS object-fit: cover).
-    const drawCover = (img) => {
+    // Draw a frame so it covers the canvas (like CSS object-fit: cover).
+    const drawCover = (img, alpha = 1) => {
+      const iw = img.naturalWidth || img.width;
+      const ih = img.naturalHeight || img.height;
       const cw = canvas.width;
       const ch = canvas.height;
-      const scale = Math.max(cw / img.naturalWidth, ch / img.naturalHeight);
-      const w = img.naturalWidth * scale;
-      const h = img.naturalHeight * scale;
+      const scale = Math.max(cw / iw, ch / ih);
+      const w = iw * scale;
+      const h = ih * scale;
+      ctx.globalAlpha = alpha;
       ctx.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
+      ctx.globalAlpha = 1;
     };
 
     // Nearest frame that has loaded (looks backwards first, then forwards).
@@ -204,17 +234,26 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
       const progress = clamp(-rect.top / scrollable, 0, 1);
       const visible = rect.bottom > 0;
 
-      eased += (progress - eased) * 0.18;
+      eased += (progress - eased) * follow;
       if (Math.abs(progress - eased) < 0.0005) eased = progress;
 
       if (visible && mode === 'frames' && ctx) {
         sizeCanvas();
         const count = loadedRef.current.length;
-        const want = Math.round(eased * (count - 1));
-        const idx = nearestLoaded(want);
-        if (idx !== -1 && idx !== drawnIndex) {
-          drawCover(framesRef.current[idx]);
-          drawnIndex = idx;
+        const pos = eased * (count - 1); // e.g. 12.4 = 40% of the way from frame 12 to 13
+        // Redraw when the position moves, or when a closer frame has just loaded.
+        if (Math.abs(pos - drawnPos) > 0.01 || drawnIndex === -1 || drawnLoaded !== loadedCountRef.current) {
+          const base = nearestLoaded(Math.floor(pos));
+          if (base !== -1) {
+            drawCover(framesRef.current[base]);
+            // Fade in the next frame by the fraction → smooth motion between pictures.
+            const nextIdx = base + 1;
+            const frac = pos - base;
+            if (frac > 0.02 && frac < 1 && loadedRef.current[nextIdx]) drawCover(framesRef.current[nextIdx], frac);
+            drawnIndex = base;
+            drawnPos = pos;
+            drawnLoaded = loadedCountRef.current;
+          }
         }
       }
 
