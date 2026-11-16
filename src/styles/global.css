@@ -563,6 +563,10 @@ address {
   object-fit: cover;
   max-width: none;
 }
+.hero-scroll__canvas {
+  background-size: cover;
+  background-position: center;
+}
 .hero-scroll__scrim {
   position: absolute;
   inset: 0;
