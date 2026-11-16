@@ -17,7 +17,15 @@ import { Link } from 'react-router-dom';
  * The video should have every frame as a keyframe (-g 1) so seeks are cheap:
  *   ffmpeg -i in.mp4 -an -c:v libx264 -crf 24 -g 1 -pix_fmt yuv420p -movflags +faststart hero-walkin.mp4
  */
-export default function ScrollVideoHero({ videoSrc, posterSrc }) {
+// Tall/portrait screens (phones) get a smaller, portrait-cropped video.
+function pickVariant({ videoSrc, posterSrc, mobileVideoSrc, mobilePosterSrc }) {
+  const portrait = typeof window !== 'undefined' && window.matchMedia('(max-aspect-ratio: 1/1)').matches;
+  if (portrait && mobileVideoSrc) return { src: mobileVideoSrc, poster: mobilePosterSrc || posterSrc };
+  return { src: videoSrc, poster: posterSrc };
+}
+
+export default function ScrollVideoHero(props) {
+  const [{ src: videoSrc, poster: posterSrc }] = useState(() => pickVariant(props));
   const sectionRef = useRef(null);
   const videoRef = useRef(null);
   const introRef = useRef(null);

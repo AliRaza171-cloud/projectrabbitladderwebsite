@@ -18,27 +18,27 @@ export const IMAGES = {
   home: {
     // Photo next to "A kids store built for kids"
     whoWeAre: {
-      url: '/media/store-shelves.jpg',
+      url: '/media/store-shelves.webp',
       alt: 'Shelves of books, plush toys and games inside Rabbit Ladders',
     },
 
     // "What you'll find" cards (names and ages are in src/data/site.js)
  categories: {
-  books: { url: '/media/home1.jpeg', alt: 'Children’s books at Rabbit Ladders' },
-  plush: { url: '/media/home2.jpeg', alt: 'Plush toys at Rabbit Ladders' },
-  games: { url: '/media/home3.jpeg', alt: 'Games and puzzles at Rabbit Ladders' },
-  clothing: { url: '/media/home4.jpeg', alt: 'Kids’ clothing at Rabbit Ladders' },
+  books: { url: '/media/home1.webp', alt: 'Children’s books at Rabbit Ladders' },
+  plush: { url: '/media/home2.webp', alt: 'Plush toys at Rabbit Ladders' },
+  games: { url: '/media/home3.webp', alt: 'Games and puzzles at Rabbit Ladders' },
+  clothing: { url: '/media/home4.webp', alt: 'Kids’ clothing at Rabbit Ladders' },
 },
 
     // "Follow along on Instagram" grid — 6 squares.
     // `link` (optional) = the Instagram post to open when the photo is clicked.
     instagram: [
-      { url: '/media/inst1.jpeg', alt: 'Recent Rabbit Ladders Instagram post', link: '' },
-      { url: '/media/inst2.jpeg', alt: 'Recent Rabbit Ladders Instagram post', link: '' },
-      { url: '/media/inst3.jpeg', alt: 'Recent Rabbit Ladders Instagram post', link: '' },
-      { url: '/media/inst4.jpeg', alt: 'Recent Rabbit Ladders Instagram post', link: '' },
-      { url: '/media/inst5.jpeg', alt: 'Recent Rabbit Ladders Instagram post', link: '' },
-      { url: '/media/inst6.jpeg', alt: 'Recent Rabbit Ladders Instagram post', link: '' },
+      { url: '/media/inst1.webp', alt: 'Recent Rabbit Ladders Instagram post', link: '' },
+      { url: '/media/inst2.webp', alt: 'Recent Rabbit Ladders Instagram post', link: '' },
+      { url: '/media/inst3.webp', alt: 'Recent Rabbit Ladders Instagram post', link: '' },
+      { url: '/media/inst4.webp', alt: 'Recent Rabbit Ladders Instagram post', link: '' },
+      { url: '/media/inst5.webp', alt: 'Recent Rabbit Ladders Instagram post', link: '' },
+      { url: '/media/inst6.webp', alt: 'Recent Rabbit Ladders Instagram post', link: '' },
     ],
   },
 
@@ -46,7 +46,7 @@ export const IMAGES = {
   ourStory: {
     // Wide photo under "Who we are."
     banner: {
-      url: '/media/store-interior.jpg',
+      url: '/media/store-interior.webp',
       alt: 'The clothing table, toy shelves and cloud decorations inside Rabbit Ladders',
     },
 

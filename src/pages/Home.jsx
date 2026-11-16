@@ -11,7 +11,12 @@ export default function Home() {
 
   return (
     <>
-      <ScrollVideoHero videoSrc="/media/hero-walkin.mp4" posterSrc="/media/hero-poster.jpg" />
+      <ScrollVideoHero
+        videoSrc="/media/hero-walkin.mp4"
+        posterSrc="/media/hero-poster.jpg"
+        mobileVideoSrc="/media/hero-walkin-mobile.mp4"
+        mobilePosterSrc="/media/hero-poster-mobile.jpg"
+      />
 
       {/* What you'll find */}
       <section className="section container" aria-labelledby="find-h">

@@ -1743,3 +1743,188 @@ address {
     print-color-adjust: exact;
   }
 }
+/* ==========================================================================
+   Responsive polish (tablets & phones)
+   ========================================================================== */
+
+/* Never allow sideways scrolling on phones. `clip` (unlike `hidden`)
+   keeps the sticky hero video working. */
+html,
+body {
+  overflow-x: clip;
+}
+
+img {
+  height: auto;
+}
+
+@media (max-width: 900px) {
+  /* "Mother & son" badge stays inside the screen */
+  .badge-pill {
+    right: 16px;
+    bottom: 20px;
+  }
+
+  /* NeeDoh rules: section list becomes a swipeable row of pills */
+  .rules {
+    gap: 32px;
+  }
+  .rules__toc {
+    flex: 1 1 100%;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    padding: 14px;
+    border-radius: 20px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .rules__toc::-webkit-scrollbar {
+    display: none;
+  }
+  .rules__toc-title {
+    display: none;
+  }
+  .rules__toc a {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 10px 16px;
+    border-radius: var(--radius-pill);
+    background: var(--lavender-100);
+  }
+  .rules__body {
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  /* Shorter scroll distance for the hero on phones */
+  .hero-scroll {
+    height: 240vh;
+  }
+  .hero-scroll__intro {
+    padding-bottom: 36px;
+  }
+  .hero-scroll__copy {
+    gap: 14px;
+  }
+  .hero-scroll__lead {
+    font-size: 17px;
+  }
+  .hero-scroll__copy .btn-row .btn {
+    flex: 1 1 auto;
+  }
+
+  /* Section spacing */
+  .section-head {
+    margin-bottom: 32px;
+  }
+  .section-head--split {
+    align-items: flex-start;
+  }
+
+  /* "What you'll find": two cards per row */
+  .grid--cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .category-card {
+    gap: 10px;
+  }
+  .category-card .placeholder,
+  .category-card .photo {
+    border-radius: 18px;
+  }
+  .category-card__meta {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .category-card__name {
+    font-size: 18px;
+  }
+
+  /* Instagram grid: three per row */
+  .grid--insta {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .grid--insta .placeholder,
+  .grid--insta .photo,
+  .insta-tile {
+    border-radius: 12px;
+  }
+
+  /* Our Story gallery: two columns */
+  .gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 170px;
+    gap: 10px;
+  }
+
+  /* Cards and panels breathe a little less */
+  .step-card,
+  .story-card {
+    padding: 26px;
+  }
+  .story-quote {
+    gap: 36px;
+  }
+  .banner-image > * {
+    border-radius: 22px !important;
+  }
+
+  /* Decorative clouds can overflow small screens */
+  .page-hero__cloud,
+  .promo__cloud {
+    display: none;
+  }
+
+  /* Map */
+  .map-embed,
+  .map-embed iframe {
+    min-height: 300px;
+  }
+
+  /* Footer */
+  .footer__inner {
+    padding-top: 48px;
+    gap: 44px;
+  }
+  .footer__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 32px 24px;
+  }
+  .footer__grid > .footer__col:first-child,
+  .footer__grid > .footer__col:last-child {
+    grid-column: 1 / -1;
+  }
+  .footer__bottom-inner {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* Preview watermark: lighter footprint on phones */
+  .watermark {
+    background-size: 300px 186px;
+  }
+  .watermark-badge {
+    left: 10px;
+    bottom: 10px;
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 420px) {
+  .btn {
+    padding: 14px 22px;
+  }
+  .promo__fact dd {
+    font-size: 20px;
+  }
+  .contact-form,
+  .card {
+    padding: 24px 20px;
+  }
+}
