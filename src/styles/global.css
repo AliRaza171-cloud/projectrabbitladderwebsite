@@ -664,11 +664,17 @@ address {
   height: 5px;
   background: rgba(255, 255, 255, 0.2);
 }
-.hero-scroll__bar {
-  height: 100%;
-  background: var(--lavender);
+
+.hero-scroll__loading {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.55);
   transform-origin: left center;
-  transform: scaleX(0);
+  transition: transform 0.2s linear;
+}
+.hero-scroll__bar {
+  position: relative;
+  height: 100%;
 }
 
 /* ==========================================================================
