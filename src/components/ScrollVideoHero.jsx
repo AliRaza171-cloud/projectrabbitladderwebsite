@@ -16,8 +16,8 @@ import { Link } from 'react-router-dom';
  *
  * Re-encode the desktop video with every frame as a keyframe:
  *   ffmpeg -i in.mp4 -an -vf fps=15,scale=1280:-2 -c:v libx264 -crf 30 -g 1 -pix_fmt yuv420p -movflags +faststart hero-walkin.mp4
- * Make the phone frames (76 frames, 432×720, centre crop):
- *   ffmpeg -i in.mp4 -vf "fps=10,crop=432:720" -c:v libwebp -quality 58 hero-frames-v2/f_%03d.webp
+ * Make the phone frames (61 frames, centre crop, upscaled 1.25× with Lanczos + light sharpening):
+ *   ffmpeg -i in.mp4 -vf "fps=8,crop=432:720,scale=540:900:flags=lanczos,unsharp=5:5:0.5:5:5:0.0" -c:v libwebp -quality 78 hero-frames-v3/f_%03d.webp
  */
 
 const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
@@ -211,6 +211,8 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
       const scale = Math.max(cw / iw, ch / ih);
       const w = iw * scale;
       const h = ih * scale;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high'; // best scaling filter the browser offers
       ctx.globalAlpha = alpha;
       ctx.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
       ctx.globalAlpha = 1;

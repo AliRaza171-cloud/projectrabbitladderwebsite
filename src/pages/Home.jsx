@@ -6,8 +6,8 @@ import usePageTitle from '../hooks/usePageTitle.js';
 import { CATEGORIES, STORE, VIDEO_VISIT_STEPS } from '../data/site.js';
 import { IMAGES } from '../data/images.js';
 
-// Phones: 76 still frames in public/media/hero-frames-v2 (f_001.webp … f_076.webp)
-const HERO_MOBILE_FRAMES = { path: '/media/hero-frames-v2/f_', count: 76, ext: 'webp', pad: 3 };
+// Phones: 61 still frames in public/media/hero-frames-v3 (f_001.webp … f_061.webp)
+const HERO_MOBILE_FRAMES = { path: '/media/hero-frames-v3/f_', count: 61, ext: 'webp', pad: 3 };
 
 export default function Home() {
   usePageTitle('');
@@ -18,7 +18,7 @@ export default function Home() {
         videoSrc="/media/hero-walkin.mp4"
         posterSrc="/media/hero-poster.jpg"
         mobileFrames={HERO_MOBILE_FRAMES}
-        mobilePosterSrc="/media/hero-poster-mobile.jpg"
+        mobilePosterSrc="/media/hero-poster-mobile-v3.jpg"
       />
 
       {/* What you'll find */}
