@@ -6,8 +6,8 @@ import usePageTitle from '../hooks/usePageTitle.js';
 import { CATEGORIES, STORE, VIDEO_VISIT_STEPS } from '../data/site.js';
 import { IMAGES } from '../data/images.js';
 
-// Phones: 60 still frames in public/media/hero-frames-v4 (f_001.webp … f_060.webp)
-const HERO_MOBILE_FRAMES = { path: '/media/hero-frames-v4/f_', count: 60, ext: 'webp', pad: 3 };
+// Phones: 64 still frames in public/media/hero-frames-v5 (f_001.webp … f_064.webp)
+const HERO_MOBILE_FRAMES = { path: '/media/hero-frames-v5/f_', count: 64, ext: 'webp', pad: 3 };
 
 export default function Home() {
   usePageTitle('');
@@ -15,10 +15,10 @@ export default function Home() {
   return (
     <>
       <ScrollVideoHero
-        videoSrc="/media/hero-walkin-v2.mp4"
-        posterSrc="/media/hero-poster-v2.jpg"
+        videoSrc="/media/hero-walkin-v3.mp4"
+        posterSrc="/media/hero-poster-v3.jpg"
         mobileFrames={HERO_MOBILE_FRAMES}
-        mobilePosterSrc="/media/hero-poster-mobile-v4.jpg"
+        mobilePosterSrc="/media/hero-poster-mobile-v5.jpg"
       />
 
       {/* What you'll find */}
