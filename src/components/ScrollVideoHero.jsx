@@ -186,7 +186,7 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
     let drawnLoaded = -1;
     let primed = false;
     // How quickly the walk-in follows the scroll (1 = instantly).
-    const follow = mode === 'frames' ? 0.35 : 0.18;
+    const follow = mode === 'frames' ? 0.15 : 0.08;
 
     // Keep the canvas at the screen's real pixel size (sharp on retina).
     const sizeCanvas = () => {

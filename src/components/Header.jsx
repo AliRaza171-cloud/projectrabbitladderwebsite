@@ -54,8 +54,7 @@ export default function Header({ overlay = false }) {
         <div className="site-header__brand">
           <Cloud className="float" />
           <Link to="/" className="logo" aria-label="Rabbit Ladders home">
-            <span>RABBIT</span>
-            <span>LADDERS</span>
+            
           </Link>
           <Cloud className="float float--delay" width={62} />
         </div>
