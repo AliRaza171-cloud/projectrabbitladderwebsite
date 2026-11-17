@@ -544,7 +544,7 @@ address {
 
 .hero-scroll {
   position: relative;
-  height: 300vh; /* scroll distance: ~2 screens of scrubbing */
+  height: 500vh; /* scroll distance: ~4 screens of scrubbing (bigger = slower walk-in) */
   background: var(--navy-deep);
 }
 .hero-scroll__sticky {
@@ -679,6 +679,9 @@ address {
 .hero-scroll__bar {
   position: relative;
   height: 100%;
+  background: var(--lavender);
+  transform-origin: left center;
+  transform: scaleX(0);
 }
 
 /* ==========================================================================
@@ -1541,7 +1544,7 @@ address {
   color: #ffb3c4;
 }
 
-.footer__wordmark {
+.footer__wordmark-wrap {
   padding: 64px var(--gutter) 0;
   line-height: 0;
   user-select: none;
@@ -1803,9 +1806,9 @@ img {
 }
 
 @media (max-width: 760px) {
-  /* Shorter scroll distance for the hero on phones */
+  /* Scroll distance for the hero on phones (bigger = slower walk-in) */
   .hero-scroll {
-    height: 240vh;
+    height: 400vh;
   }
   .hero-scroll__intro {
     padding-bottom: 36px;
