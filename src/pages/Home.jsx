@@ -8,6 +8,8 @@ import { IMAGES } from '../data/images.js';
 
 // Phones: 64 still frames in public/media/hero-frames-v5 (f_001.webp … f_064.webp)
 const HERO_MOBILE_FRAMES = { path: '/media/hero-frames-v5/f_', count: 64, ext: 'webp', pad: 3 };
+// Small versions that load first so the walk-in works within a second or two
+const HERO_MOBILE_FRAMES_LITE = { path: '/media/hero-frames-v5-lite/f_', count: 32, ext: 'webp', pad: 3 };
 
 export default function Home() {
   usePageTitle('');
@@ -16,8 +18,10 @@ export default function Home() {
     <>
       <ScrollVideoHero
         videoSrc="/media/hero-walkin-v3.mp4"
+        videoLiteSrc="/media/hero-walkin-v3-lite.mp4"
         posterSrc="/media/hero-poster-v3.jpg"
         mobileFrames={HERO_MOBILE_FRAMES}
+        mobileFramesLite={HERO_MOBILE_FRAMES_LITE}
         mobilePosterSrc="/media/hero-poster-mobile-v5.jpg"
       />
 

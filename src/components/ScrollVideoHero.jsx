@@ -4,20 +4,21 @@ import { Link } from 'react-router-dom';
 /**
  * Full-bleed hero where the store walk-in plays as the visitor scrolls.
  *
- * Two ways of showing the walk-in, picked once when the page loads:
+ * FAST START — everything loads in two layers:
+ *   1. A small "lite" version loads first (~0.4–0.7 MB) so the walk-in works
+ *      within a second or two.
+ *   2. The sharp HD version downloads quietly in the background and replaces
+ *      the lite one as soon as it's ready (no jump — it keeps the position).
  *
- *  • Laptops / landscape screens → a <video> that is downloaded in full
- *    (as a blob) and "scrubbed" by setting currentTime.
+ * Laptops / landscape screens → <video> scrubbed by setting currentTime.
+ * Phones / portrait screens   → still pictures drawn on a <canvas>
+ *   (mobile browsers often refuse to show frames of a paused video).
  *
- *  • Phones / portrait screens → a sequence of still images drawn on a
- *    <canvas>. Mobile browsers (especially iPhone Safari) often refuse to
- *    show frames of a paused video, so images are the reliable option there.
- *    Frames stream in one by one and the first frame shows straight away.
- *
- * Re-encode the desktop video with every frame as a keyframe:
- *   ffmpeg -i in.mp4 -an -vf fps=15,scale=1280:-2 -c:v libx264 -crf 30 -g 1 -pix_fmt yuv420p -movflags +faststart hero-walkin.mp4
- * Make the phone frames (61 frames, centre crop, upscaled 1.25× with Lanczos + light sharpening):
- *   ffmpeg -i in.mp4 -vf "fps=8,crop=432:720,scale=540:900:flags=lanczos,unsharp=5:5:0.5:5:5:0.0" -c:v libwebp -quality 78 hero-frames-v3/f_%03d.webp
+ * How the media files are made (ffmpeg):
+ *   HD video:   -vf fps=15,scale=1280:-2 -c:v libx264 -crf 26 -g 1 -pix_fmt yuv420p -movflags +faststart
+ *   Lite video: -vf fps=15,scale=640:-2  -c:v libx264 -crf 33 -g 1 -pix_fmt yuv420p -movflags +faststart
+ *   Phone HD frames:   fps=8, centre crop 486×720, scaled to 608×900, WebP q72
+ *   Phone lite frames: every 2nd HD frame, 304×450, WebP q50
  */
 
 const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
@@ -29,137 +30,198 @@ function pickMode({ mobileFrames }) {
 
 const frameUrl = ({ path, ext = 'webp', pad = 3 }, i) => `${path}${String(i + 1).padStart(pad, '0')}.${ext}`;
 
-export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mobilePosterSrc }) {
+// Download a file with progress, return a blob: URL (seeking from memory is instant).
+async function downloadToObjectUrl(src, signal, onProgress) {
+  const res = await fetch(src, { signal });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const total = Number(res.headers.get('content-length')) || 0;
+  if (!res.body || !total) return URL.createObjectURL(await res.blob());
+  const reader = res.body.getReader();
+  const chunks = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    if (onProgress) onProgress(received / total);
+  }
+  return URL.createObjectURL(new Blob(chunks, { type: 'video/mp4' }));
+}
+
+// Decode an image up front so drawing it later never stutters.
+async function decodeImage(img) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await createImageBitmap(img);
+    } catch {
+      /* fall through */
+    }
+  }
+  if (img.decode) await img.decode().catch(() => {});
+  return img;
+}
+
+export default function ScrollVideoHero({
+  videoSrc,
+  videoLiteSrc,
+  posterSrc,
+  mobileFrames,
+  mobileFramesLite,
+  mobilePosterSrc,
+}) {
   const [mode] = useState(() => pickMode({ mobileFrames }));
   const poster = mode === 'frames' ? mobilePosterSrc || posterSrc : posterSrc;
 
   const sectionRef = useRef(null);
-  const videoRef = useRef(null);
+  const liteVideoRef = useRef(null);
+  const hdVideoRef = useRef(null);
   const canvasRef = useRef(null);
-  const framesRef = useRef([]); // Image objects (frames mode)
-  const loadedRef = useRef([]); // booleans: which frames have loaded
-  const loadedCountRef = useRef(0); // bumps each time a frame finishes loading
   const introRef = useRef(null);
   const welcomeRef = useRef(null);
   const barRef = useRef(null);
 
+  // Video mode: which <video> is currently in charge.
+  const activeVideoRef = useRef(null);
+
+  // Frames mode: HD and lite pictures, plus a counter that bumps on every load.
+  const hdFramesRef = useRef({ imgs: [], ok: [] });
+  const liteFramesRef = useRef({ imgs: [], ok: [] });
+  const loadedCountRef = useRef(0);
+
   const [loadPct, setLoadPct] = useState(0);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(false); // walk-in can be scrolled
+  const [hdShown, setHdShown] = useState(false); // HD video is on screen
 
   // ---------------------------------------------------------------------------
-  // 1a) VIDEO mode: download the whole video, then hand it to <video>.
+  // 1a) VIDEO mode: lite video first, then HD in the background.
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (mode !== 'video') return undefined;
-    const video = videoRef.current;
-    if (!video) return undefined;
+    const lite = liteVideoRef.current;
+    const hd = hdVideoRef.current;
+    if (!hd) return undefined;
 
     const controller = new AbortController();
-    let objectUrl = '';
+    const urls = [];
+    let cancelled = false;
 
-    const setVideoBlob = (blob) => {
-      objectUrl = URL.createObjectURL(blob);
-      video.src = objectUrl;
-      video.load();
-    };
+    const whenLoaded = (video) =>
+      new Promise((resolve) => {
+        if (video.readyState >= 2) return resolve();
+        video.addEventListener('loadeddata', () => resolve(), { once: true });
+      });
 
     (async () => {
       try {
-        const res = await fetch(videoSrc, { signal: controller.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const total = Number(res.headers.get('content-length')) || 0;
-        if (!res.body || !total) {
-          setVideoBlob(await res.blob());
+        // Step 1: the lite version (or HD straight away if there is no lite file).
+        const first = videoLiteSrc && lite ? lite : hd;
+        const firstSrc = first === lite ? videoLiteSrc : videoSrc;
+        const firstUrl = await downloadToObjectUrl(firstSrc, controller.signal, (p) =>
+          setLoadPct(Math.min(99, Math.round(p * 100))),
+        );
+        if (cancelled) return;
+        urls.push(firstUrl);
+        first.src = firstUrl;
+        first.load();
+        await whenLoaded(first);
+        if (cancelled) return;
+        activeVideoRef.current = first;
+        setLoadPct(100);
+        setReady(true);
+        if (first === hd) {
+          setHdShown(true);
           return;
         }
-        const reader = res.body.getReader();
-        const chunks = [];
-        let received = 0;
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          received += value.length;
-          setLoadPct(Math.min(99, Math.round((received / total) * 100)));
-        }
-        setVideoBlob(new Blob(chunks, { type: 'video/mp4' }));
+
+        // Step 2: HD in the background, then swap it in at the same position.
+        const hdUrl = await downloadToObjectUrl(videoSrc, controller.signal);
+        if (cancelled) return;
+        urls.push(hdUrl);
+        hd.src = hdUrl;
+        hd.load();
+        await whenLoaded(hd);
+        if (cancelled) return;
+        hd.currentTime = lite.currentTime;
+        await new Promise((resolve) => {
+          const done = () => resolve();
+          hd.addEventListener('seeked', done, { once: true });
+          setTimeout(done, 400);
+        });
+        if (cancelled) return;
+        activeVideoRef.current = hd;
+        setHdShown(true);
       } catch (err) {
-        if (err.name === 'AbortError') return;
-        video.src = videoSrc; // fallback: normal streaming
-        video.load();
+        if (err.name === 'AbortError' || cancelled) return;
+        // The lite version is already working: just keep it.
+        if (activeVideoRef.current) return;
+        // Fallback: stream the HD file normally.
+        hd.src = videoSrc;
+        hd.load();
+        activeVideoRef.current = hd;
+        setHdShown(true);
+        setReady(true);
       }
     })();
 
-    const onReady = () => {
-      setLoadPct(100);
-      setReady(true);
-    };
-    video.addEventListener('loadeddata', onReady);
-
     return () => {
+      cancelled = true;
       controller.abort();
-      video.removeEventListener('loadeddata', onReady);
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      urls.forEach((u) => URL.revokeObjectURL(u));
     };
-  }, [mode, videoSrc]);
+  }, [mode, videoSrc, videoLiteSrc]);
 
   // ---------------------------------------------------------------------------
-  // 1b) FRAMES mode: load the image sequence (first frame first).
+  // 1b) FRAMES mode: all lite pictures first, then HD pictures.
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (mode !== 'frames') return undefined;
-    const { count } = mobileFrames;
     let cancelled = false;
-    let loaded = 0;
 
-    framesRef.current = new Array(count);
-    loadedRef.current = new Array(count).fill(false);
+    const hdCount = mobileFrames.count;
+    const liteCount = mobileFramesLite ? mobileFramesLite.count : 0;
+    hdFramesRef.current = { imgs: new Array(hdCount), ok: new Array(hdCount).fill(false) };
+    liteFramesRef.current = { imgs: new Array(liteCount), ok: new Array(liteCount).fill(false) };
 
-    // Load order: first frame, then every 8th frame (so the whole walk-in is
-    // roughly scrubbable early), then fill in the rest.
-    const order = [0];
+    // Queue: lite pictures in order, then HD pictures (first frame, every 8th, then fill in).
+    const queue = [];
+    for (let i = 0; i < liteCount; i++) queue.push({ set: 'lite', i });
+    const hdOrder = [0];
     for (const step of [8, 4, 2, 1]) {
-      for (let i = 0; i < count; i += step) if (!order.includes(i)) order.push(i);
+      for (let i = 0; i < hdCount; i += step) if (!hdOrder.includes(i)) hdOrder.push(i);
     }
+    hdOrder.forEach((i) => queue.push({ set: 'hd', i }));
 
+    const readyAfter = liteCount || 1; // scrollable once all lite pictures (or the first HD one) are in
+    let finished = 0;
     let next = 0;
-    // Vercel serves files over HTTP/2, so many requests can run at once.
     const PARALLEL = 16;
 
-    // Decode the picture up front so drawing it later never stutters.
-    const decodeFrame = async (img) => {
-      if (typeof createImageBitmap === 'function') {
-        try {
-          return await createImageBitmap(img);
-        } catch {
-          /* fall through */
-        }
-      }
-      if (img.decode) await img.decode().catch(() => {});
-      return img;
-    };
-
     const loadNext = () => {
-      if (cancelled || next >= order.length) return;
-      const i = order[next++];
+      if (cancelled || next >= queue.length) return;
+      const { set, i } = queue[next++];
+      const store = set === 'lite' ? liteFramesRef.current : hdFramesRef.current;
+      const cfg = set === 'lite' ? mobileFramesLite : mobileFrames;
       const img = new Image();
       img.decoding = 'async';
       const done = async (ok) => {
         if (cancelled) return;
         if (ok && img.naturalWidth) {
-          framesRef.current[i] = await decodeFrame(img);
+          store.imgs[i] = await decodeImage(img);
           if (cancelled) return;
-          loadedRef.current[i] = true;
+          store.ok[i] = true;
           loadedCountRef.current += 1;
         }
-        loaded += 1;
-        setLoadPct(Math.round((loaded / count) * 100));
-        if (loaded === count) setReady(true);
+        finished += 1;
+        if (finished <= readyAfter) {
+          setLoadPct(Math.round((finished / readyAfter) * 100));
+          if (finished === readyAfter) setReady(true);
+        }
         loadNext();
       };
       img.onload = () => done(true);
       img.onerror = () => done(false);
-      img.src = frameUrl(mobileFrames, i);
+      img.src = frameUrl(cfg, i);
     };
 
     for (let k = 0; k < PARALLEL; k++) loadNext();
@@ -167,7 +229,7 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, mobileFrames?.path, mobileFrames?.count]);
+  }, [mode, mobileFrames?.path, mobileFrames?.count, mobileFramesLite?.path, mobileFramesLite?.count]);
 
   // ---------------------------------------------------------------------------
   // 2) Map scroll position to the walk-in (both modes).
@@ -175,20 +237,17 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
   useEffect(() => {
     const section = sectionRef.current;
     if (!section) return undefined;
-    const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas ? canvas.getContext('2d') : null;
 
     let raf = 0;
     let eased = 0;
-    let drawnIndex = -1;
     let drawnPos = -1;
     let drawnLoaded = -1;
     let primed = false;
-    // How quickly the walk-in follows the scroll (1 = instantly).
+    // How quickly the walk-in follows the scroll (1 = instantly, lower = smoother glide).
     const follow = mode === 'frames' ? 0.15 : 0.08;
 
-    // Keep the canvas at the screen's real pixel size (sharp on retina).
     const sizeCanvas = () => {
       if (!canvas) return;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -197,12 +256,10 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
-        drawnIndex = -1; // force a redraw
         drawnPos = -1;
       }
     };
 
-    // Draw a frame so it covers the canvas (like CSS object-fit: cover).
     const drawCover = (img, alpha = 1) => {
       const iw = img.naturalWidth || img.width;
       const ih = img.naturalHeight || img.height;
@@ -212,20 +269,30 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
       const w = iw * scale;
       const h = ih * scale;
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high'; // best scaling filter the browser offers
+      ctx.imageSmoothingQuality = 'high';
       ctx.globalAlpha = alpha;
       ctx.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
       ctx.globalAlpha = 1;
     };
 
-    // Nearest frame that has loaded (looks backwards first, then forwards).
-    const nearestLoaded = (i) => {
-      const ok = loadedRef.current;
-      for (let d = 0; d < ok.length; d++) {
-        if (ok[i - d]) return i - d;
-        if (ok[i + d]) return i + d;
+    // Best picture available for HD frame i: HD if loaded, else the matching lite one,
+    // else the closest picture that has loaded.
+    const pictureFor = (i) => {
+      const hd = hdFramesRef.current;
+      const lite = liteFramesRef.current;
+      const hdCount = hd.ok.length;
+      if (i < 0 || i >= hdCount) return null;
+      if (hd.ok[i]) return hd.imgs[i];
+      const liteCount = lite.ok.length;
+      if (liteCount) {
+        const li = Math.round((i * (liteCount - 1)) / Math.max(1, hdCount - 1));
+        if (lite.ok[li]) return lite.imgs[li];
       }
-      return -1;
+      for (let d = 1; d < hdCount; d++) {
+        if (hd.ok[i - d]) return hd.imgs[i - d];
+        if (hd.ok[i + d]) return hd.imgs[i + d];
+      }
+      return null;
     };
 
     const tick = () => {
@@ -241,24 +308,23 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
 
       if (visible && mode === 'frames' && ctx) {
         sizeCanvas();
-        const count = loadedRef.current.length;
-        const pos = eased * (count - 1); // e.g. 12.4 = 40% of the way from frame 12 to 13
-        // Redraw when the position moves, or when a closer frame has just loaded.
-        if (Math.abs(pos - drawnPos) > 0.01 || drawnIndex === -1 || drawnLoaded !== loadedCountRef.current) {
-          const base = nearestLoaded(Math.floor(pos));
-          if (base !== -1) {
-            drawCover(framesRef.current[base]);
-            // Fade in the next frame by the fraction → smooth motion between pictures.
-            const nextIdx = base + 1;
+        const count = hdFramesRef.current.ok.length;
+        const pos = eased * (count - 1);
+        if (Math.abs(pos - drawnPos) > 0.01 || drawnLoaded !== loadedCountRef.current) {
+          const base = Math.floor(pos);
+          const a = pictureFor(base);
+          if (a) {
+            drawCover(a);
             const frac = pos - base;
-            if (frac > 0.02 && frac < 1 && loadedRef.current[nextIdx]) drawCover(framesRef.current[nextIdx], frac);
-            drawnIndex = base;
+            const b = pictureFor(base + 1);
+            if (b && b !== a && frac > 0.02) drawCover(b, frac); // smooth blend between pictures
             drawnPos = pos;
             drawnLoaded = loadedCountRef.current;
           }
         }
       }
 
+      const video = activeVideoRef.current;
       if (visible && mode === 'video' && video && video.readyState >= 2 && !video.seeking && Number.isFinite(video.duration)) {
         const target = eased * (video.duration - 0.05);
         if (Math.abs(video.currentTime - target) > 0.015) video.currentTime = target;
@@ -274,12 +340,15 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
       if (barRef.current) barRef.current.style.transform = `scaleX(${eased})`;
     };
 
-    // Video mode on touch devices: unlock seeking with one play/pause.
+    // Video mode on touch devices: unlock seeking with one play/pause per video.
     const prime = () => {
-      if (primed || !video) return;
+      if (primed) return;
       primed = true;
-      const p = video.play();
-      if (p && typeof p.then === 'function') p.then(() => video.pause()).catch(() => {});
+      [liteVideoRef.current, hdVideoRef.current].forEach((v) => {
+        if (!v) return;
+        const p = v.play();
+        if (p && typeof p.then === 'function') p.then(() => v.pause()).catch(() => {});
+      });
     };
 
     if (mode === 'video') window.addEventListener('touchstart', prime, { passive: true, once: true });
@@ -295,15 +364,29 @@ export default function ScrollVideoHero({ videoSrc, posterSrc, mobileFrames, mob
     <section ref={sectionRef} className="hero-scroll" aria-label="Step inside Rabbit Ladders">
       <div className="hero-scroll__sticky">
         {mode === 'video' ? (
-          <video
-            ref={videoRef}
-            className="hero-scroll__video"
-            poster={poster}
-            muted
-            playsInline
-            preload="auto"
-            aria-label="Walking in through the doors of Rabbit Ladders"
-          />
+          <>
+            {videoLiteSrc && (
+              <video
+                ref={liteVideoRef}
+                className="hero-scroll__video"
+                poster={poster}
+                muted
+                playsInline
+                preload="auto"
+                aria-hidden="true"
+              />
+            )}
+            <video
+              ref={hdVideoRef}
+              className="hero-scroll__video hero-scroll__video--hd"
+              style={{ opacity: hdShown || !videoLiteSrc ? 1 : 0 }}
+              poster={videoLiteSrc ? undefined : poster}
+              muted
+              playsInline
+              preload="auto"
+              aria-label="Walking in through the doors of Rabbit Ladders"
+            />
+          </>
         ) : (
           <canvas
             ref={canvasRef}
